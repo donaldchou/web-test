@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>gemini線上多功能碼錶</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #f8fafc;
+      padding: 20px;
+    }
+
+    .stopwatch-card {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      margin-bottom: 24px;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+
+    .display {
+      font-size: 3.5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 32px;
+      letter-spacing: 2px;
+      color: #ffffff;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+    }
+
+    .display .millis {
+      font-size: 2.2rem;
+      color: #38bdf8;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    button {
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      filter: brightness(1.1);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-start {
+      background: #10b981;
+      color: white;
+    }
+
+    .btn-pause {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .btn-reset {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-lap {
+      background: #6366f1;
+      color: white;
+    }
+
+    /* 計次清單 */
+    .laps-container {
+      max-height: 180px;
+      overflow-y: auto;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 16px;
+      margin-top: 8px;
+    }
+
+    .laps-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .laps-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .lap-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .lap-item:first-child {
+      color: #38bdf8;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="stopwatch-card">
+    <h1>gemini碼錶 Stopwatch</h1>
+    
+    <!-- 時間顯示區 (分:秒.毫秒) -->
+    <div class="display" id="timeDisplay">
+      00:00.<span class="millis">00</span>
+    </div>
+
+    <!-- 控制按鈕區 -->
+    <div class="controls">
+      <button id="startBtn" class="btn-start">開始</button>
+      <button id="pauseBtn" class="btn-pause" disabled>暫停</button>
+      <button id="lapBtn" class="btn-lap" disabled>計次</button>
+      <button id="resetBtn" class="btn-reset" disabled>重置</button>
+    </div>
+
+    <!-- 計次紀錄列表 -->
+    <div class="laps-container" id="lapsContainer" style="display: none;">
+      <!-- 動態插入單圈紀錄 -->
+    </div>
+  </div>
+
+  <script>
+    let startTime = 0;
+    let elapsedTime = 0;
+    let timerInterval = null;
+    let lapCount = 0;
+
+    const timeDisplay = document.getElementById('timeDisplay');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const lapBtn = document.getElementById('lapBtn');
+    const lapsContainer = document.getElementById('lapsContainer');
+
+    function formatTime(ms) {
+      const minutes = Math.floor(ms / 60000);
+      const seconds = Math.floor((ms % 60000) / 1000);
+      const centiseconds = Math.floor((ms % 1000) / 10); // 取得 1/100 秒
+
+      const m = String(minutes).padStart(2, '0');
+      const s = String(seconds).padStart(2, '0');
+      const cs = String(centiseconds).padStart(2, '0');
+
+      return `${m}:${s}.<span class="millis">${cs}</span>`;
+    }
+
+    function updateTime() {
+      const now = Date.now();
+      const currentElapsed = elapsedTime + (now - startTime);
+      timeDisplay.innerHTML = formatTime(currentElapsed);
+    }
+
+    // 開始計時
+    startBtn.addEventListener('click', () => {
+      startTime = Date.now();
+      timerInterval = setInterval(updateTime, 10); // 每 10ms 更新一次
+
+      startBtn.disabled = true;
+      pauseBtn.disabled = false;
+      lapBtn.disabled = false;
+      resetBtn.disabled = false;
+    });
+
+    // 暫停計時
+    pauseBtn.addEventListener('click', () => {
+      clearInterval(timerInterval);
+      elapsedTime += Date.now() - startTime;
+
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      lapBtn.disabled = true;
+    });
+
+    // 重置計時
+    resetBtn.addEventListener('click', () => {
+      clearInterval(timerInterval);
+      startTime = 0;
+      elapsedTime = 0;
+      lapCount = 0;
+
+      timeDisplay.innerHTML = '00:00.<span class="millis">00</span>';
+      lapsContainer.innerHTML = '';
+      lapsContainer.style.display = 'none';
+
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      lapBtn.disabled = true;
+      resetBtn.disabled = true;
+    });
+
+    // 計次（Lap）
+    lapBtn.addEventListener('click', () => {
+      lapCount++;
+      const currentElapsed = elapsedTime + (Date.now() - startTime);
+      lapsContainer.style.display = 'block';
+
+      const lapItem = document.createElement('div');
+      lapItem.className = 'lap-item';
+      lapItem.innerHTML = `
+        <span>圈數 #${lapCount}</span>
+        <span>${formatTime(currentElapsed).replace(/<[^>]*>?/gm, '')}</span>
+      `;
+      lapsContainer.prepend(lapItem); // 最新的計次放在最上方
+    });
+  </script>
+</body>
+</html>
